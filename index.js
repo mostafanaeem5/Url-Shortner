@@ -1,30 +1,62 @@
-// index.js
-// where your node app starts
-
-// init project
 require('dotenv').config();
-var express = require('express');
-var app = express();
+const express = require('express');
+const cors = require('cors');
+const dns = require('dns');
+const URL = require('url').URL;
+const bodyParser = require('body-parser');
 
-// enable CORS (https://en.wikipedia.org/wiki/Cross-origin_resource_sharing)
-// so that your API is remotely testable by FCC
-var cors = require('cors');
-app.use(cors({ optionsSuccessStatus: 200 })); // some legacy browsers choke on 204
+const app = express();
 
-// http://expressjs.com/en/starter/static-files.html
-app.use(express.static('public'));
+// Basic Configuration
+const port = process.env.PORT || 3000;
 
-// http://expressjs.com/en/starter/basic-routing.html
+app.use(bodyParser.urlencoded({ extended: false }));
+
+app.use(cors());
+
+app.use('/public', express.static(`${process.cwd()}/public`));
+
 app.get('/', function (req, res) {
-  res.sendFile(__dirname + '/views/index.html');
+    res.sendFile(process.cwd() + '/views/index.html');
 });
+const isValidUrl = (urlString) => {
+    try {
+        return Boolean(new URL(urlString));
+    } catch (e) {
+        return false;
+    }
+};
+let id = 0;
+const urls = [];
+// Your first API endpoint
+app.post('/api/shorturl', function (req, res) {
+    const originalURL = req.body.url;
+    const pattern = /^((http|https|ftp):\/\/)/;
+    if (isValidUrl(originalURL) && pattern.test(originalURL)) {
+        const urlObject = new URL(originalURL);
 
-// your first API endpoint...
-app.get('/api/hello', function (req, res) {
-  res.json({ greeting: 'hello API' });
+        dns.lookup(urlObject.hostname, (error) => {
+            if (error) {
+                console.log(error);
+                res.json({ error: 'invalid error' });
+            } else {
+                id += 1;
+                urls.push({ id: id, url: urlObject.href });
+                res.json({ original_url: urlObject.href, short_url: id });
+                console.log(urls);
+            }
+        });
+    } else {
+        res.json({ error: 'invalid error' });
+    }
 });
-
-// listen for requests :)
-var listener = app.listen(process.env.PORT || 3000, function () {
-  console.log('Your app is listening on port ' + listener.address().port);
+app.get('/api/shorturl/:id', (req, res) => {
+    const id = req.params.id;
+    const url = urls.find((item) => {
+        return item.id === Number(id);
+    });
+    res.redirect(`${url.url}`);
+});
+app.listen(port, function () {
+    console.log(`Listening on port ${port}`);
 });
